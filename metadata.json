@@ -1,0 +1,5 @@
+{
+  "name": "台股 AI 選股大師",
+  "description": "專業台股選股掃描器，結合 MACD、20MA 與 30 日箱型突破策略，提供 AI 投資建議與即時回測績效排序。",
+  "requestFramePermissions": []
+}
