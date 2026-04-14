@@ -1,5 +1,5 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
+
 import YahooFinance from 'yahoo-finance2';
 import { MACD, Stochastic, SMA } from 'technicalindicators';
 import { generateSignals, StrategyConfig } from './src/utils/strategy.js';
@@ -623,7 +623,8 @@ async function startServer() {
     }
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
