@@ -1,0 +1,18 @@
+{
+  "name": "台股 AI 選股大師",
+  "short_name": "台股大師",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111827",
+  "theme_color": "#1f2937",
+  "description": "提供台股技術分析、基本面資訊、三大法人買賣超與 AI 智慧回測",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
