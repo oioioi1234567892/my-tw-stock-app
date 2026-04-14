@@ -192,7 +192,7 @@ export default function App() {
               <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto">
                 {suggestions.map((s, idx) => (
                   <button
-                    key={idx}
+                    key={s.symbol}
                     onClick={() => selectSuggestion(s)}
                     className="w-full px-4 py-3 text-left hover:bg-gray-700 active:bg-gray-600 border-b border-gray-700 last:border-0 flex flex-col transition-colors"
                   >
@@ -416,7 +416,7 @@ export default function App() {
               </div>
               
               {/* Tab Content */}
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div key={activeTab} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {activeTab === 'picker' ? (
                   <AIStockPicker onSelectSymbol={(s) => {
                     setSymbol(s);
