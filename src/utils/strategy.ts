@@ -1,4 +1,4 @@
-import { StockData } from '../components/StockChart';
+import { StockData } from '../components/StockChart.js';
 export type { StockData };
 import { SMA, ATR } from 'technicalindicators';
 

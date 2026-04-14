@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import YahooFinance from 'yahoo-finance2';
 import { MACD, Stochastic, SMA } from 'technicalindicators';
-import { generateSignals, StrategyConfig } from './src/utils/strategy';
+import { generateSignals, StrategyConfig } from './src/utils/strategy.js';
 import path from 'path';
 import fs from 'fs/promises';
 
