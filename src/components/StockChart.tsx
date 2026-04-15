@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, IChartApi, ISeriesApi, LineData, Time, IPriceLine } from 'lightweight-charts';
-import { Pencil, Trash2, Activity, X, TrendingUp, TrendingDown, Target, ShieldCheck, Settings, Clock } from 'lucide-react';
+import { Pencil, Trash2, Activity, X, TrendingUp, TrendingDown, Target, ShieldCheck, Settings } from 'lucide-react';
 import { generateSignals, StrategyConfig, TradeResult, DiagnosisResult } from '../utils/strategy';
 import StrategyPanel from './StrategyPanel';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -49,8 +49,6 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
   const [showDiagnosis, setShowDiagnosis] = useState(false);
   const [showMarkers, setShowMarkers] = useState(true);
   const [maValues, setMaValues] = useState<{ ma60: number | null; ma20: number | null }>({ ma60: null, ma20: null });
-  const [lastUpdateTime, setLastUpdateTime] = useState<string | null>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>({
     strategyType: 'MACD_BREAKOUT',
     maPeriod: 20,
@@ -276,7 +274,6 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       priceFormat: { type: 'volume' },
       priceScaleId: '',
     });
-    volumeSeriesRef.current = volumeSeries;
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.8, bottom: 0 },
     });
@@ -476,47 +473,11 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
     };
   }, [uniqueData, ma20Data, ma10Data, boxHighData, macdData, signalData, histogramData, kData, dData, support, resistance]);
 
-  // ── Real-time price polling (every 60s) ──
-  useEffect(() => {
-    if (!symbol || data.length === 0) return;
 
-    // Set initial update time
-    setLastUpdateTime(new Date().toLocaleTimeString('zh-TW', { hour12: false }));
 
-    const fetchLatestQuote = async () => {
-      try {
-        const res = await fetch(`/api/stock/${encodeURIComponent(symbol)}/quote`);
-        if (!res.ok) return;
-        const quote = await res.json();
 
-        // Update only the last candle (or append if it's a new day)
-        if (seriesRef.current) {
-          seriesRef.current.update({
-            time: quote.time as Time,
-            open: quote.open,
-            high: quote.high,
-            low: quote.low,
-            close: quote.close,
-          });
-        }
-        if (volumeSeriesRef.current) {
-          volumeSeriesRef.current.update({
-            time: quote.time as Time,
-            value: quote.volume,
-            color: quote.close >= quote.open ? '#ef444488' : '#22c55e88',
-          });
-        }
 
-        setLastUpdateTime(new Date().toLocaleTimeString('zh-TW', { hour12: false }));
-      } catch (err) {
-        // Silently ignore polling errors
-      }
-    };
 
-    const intervalId = setInterval(fetchLatestQuote, 60_000);
-
-    return () => clearInterval(intervalId);
-  }, [symbol, data.length]);
 
 
   useEffect(() => {
@@ -908,13 +869,6 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       )}
       
       <div ref={chartWrapperRef} className="relative flex flex-col w-full rounded-lg overflow-hidden border border-gray-700 shadow-xl bg-[#1e1e1e]">
-        {/* Last Update Time Badge */}
-        {lastUpdateTime && (
-          <div className="absolute top-1 right-24 z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-800/90 border border-gray-700 backdrop-blur-sm">
-            <Clock size={10} className="text-emerald-400 animate-pulse" />
-            <span className="text-[9px] md:text-[10px] font-mono text-gray-400">最後更新：<span className="text-emerald-400 font-bold">{lastUpdateTime}</span></span>
-          </div>
-        )}
         {/* Fixed Info Panel at Top */}
         <div 
           ref={infoPanelRef} 
