@@ -563,6 +563,42 @@ async function startServer() {
     }
   });
 
+  // Lightweight endpoint for real-time price polling
+  app.get('/api/stock/:symbol/quote', async (req, res) => {
+    let { symbol } = req.params;
+    if (!symbol || symbol.trim() === '') {
+      return res.status(400).json({ error: '請提供股票代碼' });
+    }
+
+    try {
+      const fiveDaysAgo = new Date();
+      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+      const queryOptions: any = { period1: fiveDaysAgo, interval: '1d' };
+
+      const { result, targetSymbol } = await fetchStockDataWithFallback(symbol, queryOptions);
+      const quotes = result.quotes.filter((item: any) =>
+        item.date && item.open != null && item.high != null && item.low != null && item.close != null
+      );
+
+      if (quotes.length === 0) {
+        return res.status(404).json({ error: '無最新報價' });
+      }
+
+      const latest = quotes[quotes.length - 1];
+      res.json({
+        time: latest.date.toISOString().split('T')[0],
+        open: latest.open,
+        high: latest.high,
+        low: latest.low,
+        close: latest.close,
+        volume: latest.volume || 0,
+      });
+    } catch (error: any) {
+      console.error('Quote error:', error.message || error);
+      res.status(500).json({ error: '獲取即時報價失敗' });
+    }
+  });
+
   app.get('/api/stock/:symbol/institutional', async (req, res) => {
     const { symbol } = req.params;
     const cleanSymbol = symbol.split('.')[0]; // 2330.TW -> 2330
