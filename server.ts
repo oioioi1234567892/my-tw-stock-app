@@ -83,6 +83,19 @@ const yahooFinance = new (YahooFinance as any)({
   suppressNotices: ['yahooSurvey', 'ripHistorical']
 });
 
+try {
+  (yahooFinance as any).setGlobalConfig({
+    fetchOptions: {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Referer': 'https://finance.yahoo.com/'
+      }
+    }
+  });
+} catch (e) {
+  // Ignore if setGlobalConfig is not available on this version
+}
+
 // Helper to safely call yahooFinance methods and bypass validation errors
 async function safeYFCall(method: string, ...args: any[]) {
   try {
@@ -203,6 +216,12 @@ async function startServer() {
   const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
+
+  // Disable caching for all API routes
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    next();
+  });
 
   // Search endpoint to resolve names to symbols
   app.get('/api/search/:query', async (req, res) => {

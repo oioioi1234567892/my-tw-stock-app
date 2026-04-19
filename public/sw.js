@@ -17,34 +17,28 @@ self.addEventListener('install', event => {
 
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        return fetch(event.request).then(
-          response => {
-            // Check if we received a valid response
-            if(!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
+    fetch(event.request).then(response => {
+      // Check if we received a valid response
+      if(!response || response.status !== 200 || response.type !== 'basic') {
+        return response;
+      }
 
-            // cloned response to stream it to cache AND browser
-            const responseToCache = response.clone();
+      // cloned response to stream it to cache AND browser
+      const responseToCache = response.clone();
 
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                // We only cache GET requests
-                if (event.request.method === 'GET') {
-                  cache.put(event.request, responseToCache);
-                }
-              });
-
-            return response;
+      caches.open(CACHE_NAME)
+        .then(cache => {
+          // We only cache GET requests
+          if (event.request.method === 'GET') {
+            cache.put(event.request, responseToCache);
           }
-        );
-      })
+        });
+
+      return response;
+    }).catch(() => {
+      // Network failed, fallback to cache
+      return caches.match(event.request);
+    })
   );
 });
 

@@ -48,7 +48,7 @@ export default function App() {
         return next;
       });
 
-      fetch('/api/backtest', {
+      fetch(`/api/backtest?t=${Date.now()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -85,7 +85,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/stock/${ticker}`);
+      const response = await fetch(`/api/stock/${ticker}?t=${Date.now()}`);
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.error || '獲取股票數據失敗，請檢查代碼是否正確。');
@@ -114,7 +114,7 @@ export default function App() {
         return;
       }
       try {
-        const response = await fetch(`/api/search/${encodeURIComponent(searchInput)}`);
+        const response = await fetch(`/api/search/${encodeURIComponent(searchInput)}?t=${Date.now()}`);
         if (response.ok) {
           const data = await response.json();
           // Translate suggestions (limit to top 5 to avoid rate limits)

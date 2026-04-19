@@ -17,7 +17,7 @@ export default function InstitutionalPanel({ symbol }: InstitutionalPanelProps) 
 
   const fetchData = async () => {
     try {
-      const response = await fetch(`/api/stock/${symbol}/institutional`);
+      const response = await fetch(`/api/stock/${symbol}/institutional?t=${Date.now()}`);
       const result = await response.json();
       
       if (!response.ok) throw new Error(result.error || '獲取法人數據失敗');
