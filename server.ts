@@ -214,6 +214,15 @@ function formatStockData(quotes: any[]) {
   });
 }
 
+function getTaipeiDate() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -395,93 +404,10 @@ async function startServer() {
         return res.status(404).json({ error: '找不到該代碼的有效交易數據' });
       }
 
-      // Calculate MACD
-      const closePrices = formattedData.map(d => d.close);
-      const macdInput = {
-        values: closePrices,
-        fastPeriod: 12,
-        slowPeriod: 26,
-        signalPeriod: 9,
-        SimpleMAOscillator: false,
-        SimpleMASignal: false
-      };
-      const macdResult = MACD.calculate(macdInput);
-      
-      // Calculate KD (Stochastic Oscillator)
-      const kdInput = {
-        high: formattedData.map(d => d.high),
-        low: formattedData.map(d => d.low),
-        close: closePrices,
-        period: 9,
-        signalPeriod: 3
-      };
-      const kdResult = Stochastic.calculate(kdInput);
-
-      // Align indicators with data (technicalindicators returns shorter arrays due to periods)
-      const macdOffset = formattedData.length - macdResult.length;
-      const kdOffset = formattedData.length - kdResult.length;
-
-      const chartData = formattedData.map((d, i) => {
-        const macd = i >= macdOffset ? macdResult[i - macdOffset] : null;
-        const kd = i >= kdOffset ? kdResult[i - kdOffset] : null;
-        return {
-          ...d,
-          macd: macd ? macd.MACD : null,
-          signal: macd ? macd.signal : null,
-          histogram: macd ? macd.histogram : null,
-          k: kd ? kd.k : null,
-          d: kd ? kd.d : null,
-        };
-      });
-
-      // Calculate Support and Resistance based on last 30 days volume profile
-      const last30Days = formattedData.slice(-30);
-      let support = null;
-      let resistance = null;
-
-      if (last30Days.length > 0) {
-        const minPrice = Math.min(...last30Days.map(d => d.low));
-        const maxPrice = Math.max(...last30Days.map(d => d.high));
-        const currentPrice = last30Days[last30Days.length - 1].close;
-
-        // Create 20 price bins
-        const numBins = 20;
-        const binSize = (maxPrice - minPrice) / numBins;
-        const bins = Array(numBins).fill(0).map((_, i) => ({
-          price: minPrice + (i + 0.5) * binSize,
-          volume: 0
-        }));
-
-        last30Days.forEach(day => {
-          const typicalPrice = (day.high + day.low + day.close) / 3;
-          const binIndex = Math.min(
-            Math.floor((typicalPrice - minPrice) / binSize),
-            numBins - 1
-          );
-          if (binIndex >= 0) {
-            bins[binIndex].volume += day.volume;
-          }
-        });
-
-        // Find max volume bin above current price (Resistance)
-        const aboveBins = bins.filter(b => b.price > currentPrice);
-        if (aboveBins.length > 0) {
-          resistance = aboveBins.reduce((max, b) => b.volume > max.volume ? b : max, aboveBins[0]).price;
-        } else {
-          resistance = maxPrice;
-        }
-
-        // Find max volume bin below current price (Support)
-        const belowBins = bins.filter(b => b.price < currentPrice);
-        if (belowBins.length > 0) {
-          support = belowBins.reduce((max, b) => b.volume > max.volume ? b : max, belowBins[0]).price;
-        } else {
-          support = minPrice;
-        }
-      }
-
-      // Fetch fundamental data
+      // Fetch fundamental & current price data
       let fundamentals = null;
+      let liveBar = null;
+
       try {
         const summary = await safeYFCall('quoteSummary', symbol, {
           modules: [
@@ -490,12 +416,31 @@ async function startServer() {
             'defaultKeyStatistics', 
             'price',
             'majorHoldersBreakdown',
-            'insiderTransactions',
             'quoteType',
           ]
         });
         
-        // Fetch quarterly margin history using fundamentalsTimeSeries (more reliable)
+        // Construct live bar for the current trading day
+        if (summary.price && summary.summaryDetail) {
+          const price = summary.price;
+          const sd = summary.summaryDetail;
+          
+          // Taiwan Market Date (check if it's currently trading or just closed)
+          const todayStr = getTaipeiDate();
+          
+          if (price.regularMarketOpen !== null && price.regularMarketPrice !== null) {
+            liveBar = {
+              time: todayStr,
+              open: price.regularMarketOpen || price.regularMarketPrice,
+              high: sd.dayHigh || price.regularMarketPrice,
+              low: sd.dayLow || price.regularMarketPrice,
+              close: price.regularMarketPrice,
+              volume: sd.regularMarketVolume || 0
+            };
+          }
+        }
+
+        // Fetch quarterly margin history
         let marginHistory: any[] = [];
         try {
           const threeYearsAgo = new Date();
@@ -521,7 +466,7 @@ async function startServer() {
             }).filter(Boolean);
           }
         } catch (fsError) {
-          console.warn('Could not fetch fundamentalsTimeSeries for', symbol, (fsError as any).message);
+          // Ignore
         }
 
         fundamentals = {
@@ -547,11 +492,91 @@ async function startServer() {
           marginHistory,
         };
       } catch (fError: any) {
-        const isValidationError = fError.name === 'FailedYahooValidationError' || 
-                                (fError.errors && Array.isArray(fError.errors));
-        if (!isValidationError) {
-          console.warn('Could not fetch fundamentals for', symbol, fError.message || fError);
+        console.warn('Could not fetch fundamentals for', symbol);
+      }
+
+      // Merge liveBar into formattedData if it's newer or same date
+      if (liveBar) {
+        const lastBar = formattedData[formattedData.length - 1];
+        if (liveBar.time > lastBar.time) {
+          formattedData.push(liveBar);
+        } else if (liveBar.time === lastBar.time) {
+          // Update the last bar with live data (likely more recent)
+          formattedData[formattedData.length - 1] = {
+            ...lastBar,
+            ...liveBar,
+            // Keep the historical high/low if they were higher/lower than the live snapshot
+            high: Math.max(lastBar.high, liveBar.high),
+            low: Math.min(lastBar.low, liveBar.low),
+          };
         }
+      }
+
+      // Calculate indicators on the merged data
+      const closePrices = formattedData.map(d => d.close);
+      const macdResult = MACD.calculate({
+        values: closePrices,
+        fastPeriod: 12,
+        slowPeriod: 26,
+        signalPeriod: 9,
+        SimpleMAOscillator: false,
+        SimpleMASignal: false
+      });
+      
+      const kdResult = Stochastic.calculate({
+        high: formattedData.map(d => d.high),
+        low: formattedData.map(d => d.low),
+        close: closePrices,
+        period: 9,
+        signalPeriod: 3
+      });
+
+      const macdOffset = formattedData.length - macdResult.length;
+      const kdOffset = formattedData.length - kdResult.length;
+
+      const chartData = formattedData.map((d, i) => {
+        const macd = i >= macdOffset ? macdResult[i - macdOffset] : null;
+        const kd = i >= kdOffset ? kdResult[i - kdOffset] : null;
+        return {
+          ...d,
+          macd: macd ? macd.MACD : null,
+          signal: macd ? macd.signal : null,
+          histogram: macd ? macd.histogram : null,
+          k: kd ? kd.k : null,
+          d: kd ? kd.d : null,
+        };
+      });
+
+      // Support/Resistance calculation (using the same logic as before)
+      const last30Days = formattedData.slice(-30);
+      let support = null;
+      let resistance = null;
+
+      if (last30Days.length > 0) {
+        const minPrice = Math.min(...last30Days.map(d => d.low));
+        const maxPrice = Math.max(...last30Days.map(d => d.high));
+        const currentPrice = last30Days[last30Days.length - 1].close;
+
+        const numBins = 20;
+        const binSize = (maxPrice - minPrice) / numBins || 1;
+        const bins = Array(numBins).fill(0).map((_, i) => ({
+          price: minPrice + (i + 0.5) * binSize,
+          volume: 0
+        }));
+
+        last30Days.forEach(day => {
+          const typicalPrice = (day.high + day.low + day.close) / 3;
+          const binIndex = Math.min(Math.floor((typicalPrice - minPrice) / binSize), numBins - 1);
+          if (binIndex >= 0) bins[binIndex].volume += day.volume;
+        });
+
+        const aboveBins = bins.filter(b => b.price > currentPrice);
+        if (aboveBins.length > 0) resistance = aboveBins.reduce((max, b) => b.volume > max.volume ? b : max, aboveBins[0]).price;
+        else resistance = maxPrice;
+
+        const belowBins = bins.filter(b => b.price < currentPrice);
+        if (belowBins.length > 0) support = belowBins.reduce((max, b) => b.volume > max.volume ? b : max, belowBins[0]).price;
+        else support = minPrice;
       }
 
       res.json({
@@ -563,39 +588,48 @@ async function startServer() {
       });
 
     } catch (error: any) {
-      const isValidationError = error.name === 'FailedYahooValidationError' || 
-                              (error.errors && Array.isArray(error.errors));
+      console.error('Error fetching stock data:', error.message || error);
+      res.status(500).json({ error: '獲取股票數據失敗' });
+    }
+  });
+
+  app.get('/api/stock/:symbol/latest', async (req, res) => {
+    let { symbol } = req.params;
+    try {
+      const summary = await safeYFCall('quoteSummary', symbol, {
+        modules: ['summaryDetail', 'price']
+      });
       
-      if (isValidationError) {
-        console.error(`Error fetching stock data for ${symbol}: 數據驗證失敗 (Validation Error)`);
-      } else {
-        console.error('Error fetching stock data:', error.message || error);
+      if (!summary.price || !summary.summaryDetail) {
+        return res.status(404).json({ error: '找不到即時數據' });
       }
 
-      const errorMessage = error.message || '';
-      if (
-        errorMessage.includes('No data found') || 
-        errorMessage.includes('delisted') || 
-        errorMessage.includes('Not Found') ||
-        error.name === 'NotFoundError'
-      ) {
-        return res.status(404).json({ error: `找不到代碼 "${symbol}" 的數據，可能已下市或代碼錯誤。` });
-      }
-      res.status(500).json({ error: '獲取股票數據失敗，請稍後再試。' });
+      const price = summary.price;
+      const sd = summary.summaryDetail;
+      const todayStr = getTaipeiDate();
+
+      res.json({
+        time: todayStr,
+        open: price.regularMarketOpen || price.regularMarketPrice,
+        high: sd.dayHigh || price.regularMarketPrice,
+        low: sd.dayLow || price.regularMarketPrice,
+        close: price.regularMarketPrice,
+        volume: sd.regularMarketVolume || 0
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: '獲取即時數據失敗' });
     }
   });
 
   app.get('/api/stock/:symbol/institutional', async (req, res) => {
     const { symbol } = req.params;
-    const cleanSymbol = symbol.split('.')[0]; // 2330.TW -> 2330
+    const cleanSymbol = symbol.split('.')[0]; 
 
     try {
-      // 1. Get last 30 trading dates from Yahoo Finance
       const queryOptions = { period1: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000), interval: '1d' };
       const { result } = await fetchStockDataWithFallback(symbol, queryOptions);
       if (!result || !result.quotes) return res.status(404).json({ error: '找不到數據' });
 
-      // Take last 30 quotes
       const recentQuotes = result.quotes.filter((q: any) => q.close !== null).slice(-30);
       const dates = recentQuotes.map((q: any) => q.date.toISOString().split('T')[0]);
 

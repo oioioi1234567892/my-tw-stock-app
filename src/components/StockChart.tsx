@@ -520,55 +520,25 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
 
     const fetchLatest = async () => {
       try {
-        const querySymbol = /^[A-Za-z0-9]{4,6}$/.test(symbol) && !symbol.includes('.') ? `${symbol}.TW` : symbol;
-        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${querySymbol}?interval=1d&range=1d`);
+        const res = await fetch(`/api/stock/${symbol}/latest?t=${Date.now()}`);
         if (!res.ok) return;
-        const json = await res.json();
+        const latestPoint = await res.json();
         
-        const result = json.chart?.result?.[0];
-        if (!result || !result.timestamp || !result.indicators?.quote?.[0]) return;
+        if (!latestPoint.time || typeof latestPoint.close !== 'number') return;
         
-        const timestamp = result.timestamp[result.timestamp.length - 1];
-        const quote = result.indicators.quote[0];
-        
-        const open = quote.open?.[quote.open.length - 1];
-        const high = quote.high?.[quote.high.length - 1];
-        const low = quote.low?.[quote.low.length - 1];
-        const close = quote.close?.[quote.close.length - 1];
-
-        if (typeof close !== 'number' || typeof open !== 'number' || typeof high !== 'number' || typeof low !== 'number') return;
-        
-        const dateObj = new Date(timestamp * 1000);
-        const year = dateObj.getUTCFullYear();
-        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(dateObj.getUTCDate()).padStart(2, '0');
-        const newTS = `${year}-${month}-${day}` as Time;
-
-        console.log(`[RealTime] Polled: ${newTS}, Price: ${close}, LastTS: ${uniqueData[uniqueData.length - 1].time}`);
-
-        const volume = quote.volume?.[quote.volume.length - 1] || 0;
-        
-        const latestPoint = {
-          time: newTS,
-          open,
-          high,
-          low,
-          close,
-          volume
-        };
+        console.log(`[RealTime] Polled: ${latestPoint.time}, Price: ${latestPoint.close}`);
 
         lastRealTimePointRef.current = latestPoint;
-        const lastTS = uniqueData[uniqueData.length - 1].time;
 
         if (seriesRef.current) {
           seriesRef.current.update(latestPoint);
-          // Also update volume series
+          
           const mainChart = mainChartRef.current as any;
           if (mainChart?.volumeSeries) {
             mainChart.volumeSeries.update({
-              time: newTS,
-              value: volume,
-              color: close >= open ? '#ef444488' : '#22c55e88',
+              time: latestPoint.time,
+              value: latestPoint.volume,
+              color: latestPoint.close >= latestPoint.open ? '#ef444488' : '#22c55e88',
             });
           }
         }
