@@ -495,17 +495,15 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
         const json = await res.json();
         
         const result = json.chart?.result?.[0];
-        if (!result) return;
+        if (!result || !result.timestamp || !result.indicators?.quote?.[0]) return;
         
-        const timestamp = result.timestamp?.[result.timestamp.length - 1];
-        const quote = result.indicators?.quote?.[0];
+        const timestamp = result.timestamp[result.timestamp.length - 1];
+        const quote = result.indicators.quote[0];
         
-        if (!timestamp || !quote) return;
-        
-        const open = quote.open[quote.open.length - 1];
-        const high = quote.high[quote.high.length - 1];
-        const low = quote.low[quote.low.length - 1];
-        const close = quote.close[quote.close.length - 1];
+        const open = quote.open?.[quote.open.length - 1];
+        const high = quote.high?.[quote.high.length - 1];
+        const low = quote.low?.[quote.low.length - 1];
+        const close = quote.close?.[quote.close.length - 1];
 
         if (typeof close !== 'number' || typeof open !== 'number' || typeof high !== 'number' || typeof low !== 'number') return;
         

@@ -658,7 +658,7 @@ async function startServer() {
 
   // Only listen on a port if not running in a Vercel serverless environment
   if (!process.env.VERCEL) {
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   }
