@@ -578,7 +578,8 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       }
     };
 
-    timerId = setInterval(fetchLatest, 60000);
+    const timerId = setInterval(fetchLatest, 60000);
+    fetchLatest(); // Initial call
     return () => clearInterval(timerId);
   }, [symbol, uniqueData]);
 

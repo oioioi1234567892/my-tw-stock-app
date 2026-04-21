@@ -158,19 +158,22 @@ async function fetchStockDataWithFallback(symbol: string, queryOptions: any) {
 // Helper to format data and calculate indicators
 function formatStockData(quotes: any[]) {
   const formattedData = quotes
-    .filter((item: any) => 
-      item.date && 
-      item.open !== null && item.open !== undefined &&
-      item.high !== null && item.high !== undefined &&
-      item.low !== null && item.low !== undefined &&
-      item.close !== null && item.close !== undefined
-    )
+    .filter((item: any, index: number) => {
+      const isLast = index === quotes.length - 1;
+      const hasBase = item.date;
+      const isValid = item.open !== null && item.open !== undefined &&
+                     item.high !== null && item.high !== undefined &&
+                     item.low !== null && item.low !== undefined &&
+                     item.close !== null && item.close !== undefined;
+      
+      return hasBase && (isValid || isLast);
+    })
     .map((item: any) => ({
       time: item.date.toISOString().split('T')[0],
-      open: item.open,
-      high: item.high,
-      low: item.low,
-      close: item.close,
+      open: item.open || 0,
+      high: item.high || 0,
+      low: item.low || 0,
+      close: item.close || 0,
       volume: item.volume || 0,
     }));
 
