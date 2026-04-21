@@ -517,7 +517,6 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
   useEffect(() => {
     if (!symbol || uniqueData.length === 0 || !mainChartRef.current) return;
 
-    let timerId: ReturnType<typeof setInterval>;
 
     const fetchLatest = async () => {
       try {
@@ -578,9 +577,9 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       }
     };
 
-    const timerId = setInterval(fetchLatest, 60000);
+    const stockTimerId = setInterval(fetchLatest, 60000);
     fetchLatest(); // Initial call
-    return () => clearInterval(timerId);
+    return () => clearInterval(stockTimerId);
   }, [symbol, uniqueData]);
 
   useEffect(() => {
