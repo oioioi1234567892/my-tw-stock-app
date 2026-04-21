@@ -40,7 +40,8 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
   const verticalLineRef = useRef<HTMLDivElement>(null);
   const infoPanelRef = useRef<HTMLDivElement>(null);
   
-  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const seriesRef = React.useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const lastRealTimePointRef = React.useRef<any>(null);
   const drawnLinesRef = useRef<ISeriesApi<"Line">[]>([]);
   
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -432,6 +433,19 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       low: d.low,
       close: d.close,
     }));
+
+    // Merge persistent real-time point if it's newer or same as last uniqueData point
+    if (lastRealTimePointRef.current) {
+      const lastUniqueTime = candleData[candleData.length - 1].time;
+      if (lastRealTimePointRef.current.time >= lastUniqueTime) {
+        const existingIdx = candleData.findIndex(d => d.time === lastRealTimePointRef.current.time);
+        if (existingIdx !== -1) {
+          candleData[existingIdx] = lastRealTimePointRef.current;
+        } else {
+          candleData.push(lastRealTimePointRef.current);
+        }
+      }
+    }
     
     seriesRef.current?.setData(candleData);
     mainChart.ma60Series.setData(ma60Data);
@@ -444,6 +458,24 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       value: d.volume,
       color: d.close >= d.open ? '#ef444488' : '#22c55e88',
     }));
+
+    if (lastRealTimePointRef.current) {
+      const lastUniqueTime = volumeData[volumeData.length - 1].time;
+      if (lastRealTimePointRef.current.time >= lastUniqueTime) {
+        const payload = {
+          time: lastRealTimePointRef.current.time,
+          value: lastRealTimePointRef.current.volume,
+          color: lastRealTimePointRef.current.close >= lastRealTimePointRef.current.open ? '#ef444488' : '#22c55e88',
+        };
+        const existingIdx = volumeData.findIndex(d => d.time === lastRealTimePointRef.current.time);
+        if (existingIdx !== -1) {
+          volumeData[existingIdx] = payload;
+        } else {
+          volumeData.push(payload);
+        }
+      }
+    }
+
     mainChart.volumeSeries.setData(volumeData);
 
     macdChart.macdSeries.setData(macdData);
@@ -508,25 +540,38 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
         if (typeof close !== 'number' || typeof open !== 'number' || typeof high !== 'number' || typeof low !== 'number') return;
         
         const dateObj = new Date(timestamp * 1000);
-        const year = dateObj.getFullYear();
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const day = String(dateObj.getDate()).padStart(2, '0');
+        const year = dateObj.getUTCFullYear();
+        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getUTCDate()).padStart(2, '0');
         const newTS = `${year}-${month}-${day}` as Time;
 
+        console.log(`[RealTime] Polled: ${newTS}, Price: ${close}, LastTS: ${uniqueData[uniqueData.length - 1].time}`);
+
+        const volume = quote.volume?.[quote.volume.length - 1] || 0;
+        
         const latestPoint = {
           time: newTS,
           open,
           high,
           low,
-          close
+          close,
+          volume
         };
 
+        lastRealTimePointRef.current = latestPoint;
         const lastTS = uniqueData[uniqueData.length - 1].time;
 
-        if (newTS === lastTS) {
-          seriesRef.current?.update(latestPoint);
-        } else if (newTS > lastTS) {
-          seriesRef.current?.update(latestPoint);
+        if (seriesRef.current) {
+          seriesRef.current.update(latestPoint);
+          // Also update volume series
+          const mainChart = mainChartRef.current as any;
+          if (mainChart?.volumeSeries) {
+            mainChart.volumeSeries.update({
+              time: newTS,
+              value: volume,
+              color: close >= open ? '#ef444488' : '#22c55e88',
+            });
+          }
         }
       } catch (err) {
         console.error('Failed to fetch real-time data:', err);
