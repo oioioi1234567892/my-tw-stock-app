@@ -142,7 +142,7 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
   }, [uniqueData]);
 
   useEffect(() => {
-    if (!mainChartContainerRef.current || !macdChartContainerRef.current || !kdChartContainerRef.current || uniqueData.length === 0) return;
+    if (!mainChartContainerRef.current || !macdChartContainerRef.current || !kdChartContainerRef.current) return;
 
     const commonOptions = {
       layout: {
@@ -169,7 +169,7 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       rightPriceScale: {
         borderColor: '#374151',
         borderVisible: false,
-        width: 90, // Increased and fixed width for better alignment
+        width: 90, 
         scaleMargins: {
           top: 0.1,
           bottom: 0.1,
@@ -221,15 +221,6 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
     });
     seriesRef.current = candlestickSeries;
 
-    const candleData = uniqueData.map(d => ({
-      time: d.time as Time,
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
-    }));
-    candlestickSeries.setData(candleData);
-
     const ma60Series = mainChart.addLineSeries({
       color: '#ec4899',
       lineWidth: 2,
@@ -237,8 +228,7 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       lastValueVisible: false,
       priceLineVisible: false,
     });
-    ma60Series.setData(ma60Data);
-
+    
     const ma20Series = mainChart.addLineSeries({
       color: '#facc15',
       lineWidth: 1,
@@ -247,7 +237,6 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       priceLineVisible: false,
       visible: true,
     });
-    ma20Series.setData(ma20Data);
 
     const ma10Series = mainChart.addLineSeries({
       color: '#a855f7',
@@ -255,19 +244,17 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       crosshairMarkerVisible: false,
       lastValueVisible: false,
       priceLineVisible: false,
-      visible: false, // Hide line as requested "取消MA10與MA20價格顯示"
+      visible: false,
     });
-    ma10Series.setData(ma10Data);
 
     const boxHighSeries = mainChart.addLineSeries({
       color: '#3b82f6',
       lineWidth: 1,
-      lineStyle: 2, // Dashed
+      lineStyle: 2, 
       crosshairMarkerVisible: false,
       lastValueVisible: false,
       priceLineVisible: false,
     });
-    boxHighSeries.setData(boxHighData);
 
     const volumeSeries = mainChart.addHistogramSeries({
       color: '#3b82f6',
@@ -277,19 +264,13 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.8, bottom: 0 },
     });
-    const volumeData = uniqueData.map(d => ({
-      time: d.time as Time,
-      value: d.volume,
-      color: d.close >= d.open ? '#ef444488' : '#22c55e88',
-    }));
-    volumeSeries.setData(volumeData);
     
-    if (support) {
-      candlestickSeries.createPriceLine({ price: support, color: '#3b82f6', lineWidth: 2, lineStyle: 2, axisLabelVisible: true });
-    }
-    if (resistance) {
-      candlestickSeries.createPriceLine({ price: resistance, color: '#f59e0b', lineWidth: 2, lineStyle: 2, axisLabelVisible: true });
-    }
+    // Store refs for updates
+    (mainChart as any).ma60Series = ma60Series;
+    (mainChart as any).ma20Series = ma20Series;
+    (mainChart as any).ma10Series = ma10Series;
+    (mainChart as any).boxHighSeries = boxHighSeries;
+    (mainChart as any).volumeSeries = volumeSeries;
 
     // 2. MACD Chart
     const macdChart = createChart(macdChartContainerRef.current, {
@@ -307,9 +288,9 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
     const signalSeries = macdChart.addLineSeries({ color: '#f59e0b', lineWidth: 1 });
     const histogramSeries = macdChart.addHistogramSeries({ color: '#ef4444' });
 
-    macdSeries.setData(macdData);
-    signalSeries.setData(signalData);
-    histogramSeries.setData(histogramData);
+    (macdChart as any).macdSeries = macdSeries;
+    (macdChart as any).signalSeries = signalSeries;
+    (macdChart as any).histogramSeries = histogramSeries;
 
     // 3. KD Chart
     const kdChart = createChart(kdChartContainerRef.current, {
@@ -326,8 +307,8 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
     const kSeries = kdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1 });
     const dSeries = kdChart.addLineSeries({ color: '#f59e0b', lineWidth: 1 });
 
-    kSeries.setData(kData);
-    dSeries.setData(dData);
+    (kdChart as any).kSeries = kSeries;
+    (kdChart as any).dSeries = dSeries;
 
     // Sync Time Scales and Crosshairs
     const charts = [mainChart, macdChart, kdChart];
@@ -338,17 +319,8 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       
       const dateStr = typeof currentData.time === 'string' ? currentData.time : '';
       
-      // Calculate MAs for info panel
-      const idx = uniqueData.findIndex(d => d.time === currentData.time);
-      const getMAValue = (period: number) => {
-        if (idx < period - 1) return null;
-        const slice = uniqueData.slice(idx - (period - 1), idx + 1);
-        return slice.reduce((sum, d) => sum + d.close, 0) / period;
-      };
-      const m60 = getMAValue(60);
-      const m20 = getMAValue(20);
-      
-      setMaValues({ ma60: m60, ma20: m20 });
+      const m60 = (mainChart as any)._lastMA60;
+      const m20 = (mainChart as any)._lastMA20;
 
       infoPanelRef.current.innerHTML = `
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] md:text-[11px]">
@@ -361,20 +333,18 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
           <div class="flex items-center gap-1"><span class="text-gray-500">MA20:</span><span class="text-yellow-400">${m20 ? m20.toFixed(2) : '-'}</span></div>
         </div>
       `;
-      
       infoPanelRef.current.style.display = 'block';
     };
 
     const snapToLatest = () => {
-      const latestData = uniqueData[uniqueData.length - 1];
-      if (latestData && mainChartRef.current && verticalLineRef.current) {
-        const x = mainChartRef.current.timeScale().timeToCoordinate(latestData.time as Time);
-        if (x !== null) {
-          const roundedX = Math.round(x);
-          verticalLineRef.current.style.display = 'block';
-          verticalLineRef.current.style.transform = `translateX(${roundedX}px)`;
-          updateInfoPanel(latestData, roundedX, null);
-        }
+      if (!mainChartRef.current || !verticalLineRef.current || !(mainChartRef.current as any)._latestData) return;
+      const latestData = (mainChartRef.current as any)._latestData;
+      const x = mainChartRef.current.timeScale().timeToCoordinate(latestData.time as Time);
+      if (x !== null) {
+        const roundedX = Math.round(x);
+        verticalLineRef.current.style.display = 'block';
+        verticalLineRef.current.style.transform = `translateX(${roundedX}px)`;
+        updateInfoPanel(latestData, roundedX, null);
       }
     };
 
@@ -390,17 +360,12 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
 
       chart.subscribeCrosshairMove((param) => {
         if (isSyncing) return;
-        
         if (!param.point || !param.time || !verticalLineRef.current || !infoPanelRef.current) {
-          if (!isSyncing) {
-            snapToLatest();
-          }
+          if (!isSyncing) snapToLatest();
           return;
         }
 
         isSyncing = true;
-        
-        // 同步垂直線
         const x = chart.timeScale().timeToCoordinate(param.time);
         if (x !== null && verticalLineRef.current) {
           const roundedX = Math.round(x);
@@ -408,35 +373,17 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
           verticalLineRef.current.style.transform = `translateX(${roundedX}px)`;
         }
 
-        // 同步其他圖表
         charts.forEach(c => {
           if (c !== chart) c.setCrosshairPosition(param.point?.x ?? 0, param.time as Time, null);
         });
         
-        // 顯示資訊面板 (Tooltip)
-        const currentData = uniqueData.find(d => d.time === param.time);
+        const currentData = (mainChartRef.current as any)._uniqueData?.find((d: any) => d.time === param.time);
         if (currentData) {
           updateInfoPanel(currentData, param.point.x, param.point.y);
         }
-        
         isSyncing = false;
       });
     });
-
-    // Align to latest data
-    const dataLength = uniqueData.length;
-    if (dataLength > 0) {
-      const logicalRange = {
-        from: Math.max(0, dataLength - 100),
-        to: dataLength - 1,
-      };
-      mainChart.timeScale().setVisibleLogicalRange(logicalRange);
-      macdChart.timeScale().setVisibleLogicalRange(logicalRange);
-      kdChart.timeScale().setVisibleLogicalRange(logicalRange);
-      
-      // Initial snap to latest data
-      setTimeout(snapToLatest, 50);
-    }
 
     const handleResize = () => {
       if (!chartWrapperRef.current || !mainChartRef.current || !macdChartRef.current || !kdChartRef.current) return;
@@ -451,18 +398,9 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       kdChartRef.current.resize(width, isMobile ? 130 : 180);
     };
 
-    const resizeObserver = new ResizeObserver(() => {
-      requestAnimationFrame(handleResize);
-    });
-
-    if (chartWrapperRef.current) {
-      resizeObserver.observe(chartWrapperRef.current);
-    }
-
+    const resizeObserver = new ResizeObserver(() => requestAnimationFrame(handleResize));
+    if (chartWrapperRef.current) resizeObserver.observe(chartWrapperRef.current);
     window.addEventListener('resize', handleResize);
-
-    // Initial resize to ensure alignment
-    setTimeout(handleResize, 100);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -470,15 +408,136 @@ export default function StockChart({ data, support, resistance, symbol, onConfig
       mainChart.remove();
       macdChart.remove();
       kdChart.remove();
+      mainChartRef.current = null;
+      macdChartRef.current = null;
+      kdChartRef.current = null;
     };
+  }, []); // Only run once on mount
+
+  // Data update effect
+  useEffect(() => {
+    if (!mainChartRef.current || !macdChartRef.current || !kdChartRef.current || uniqueData.length === 0) return;
+
+    const mainChart = mainChartRef.current as any;
+    const macdChart = macdChartRef.current as any;
+    const kdChart = kdChartRef.current as any;
+    
+    // Check if initializing (first time setting data)
+    const isInitializing = !(mainChart as any)._hasSetData;
+
+    const candleData = uniqueData.map(d => ({
+      time: d.time as Time,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }));
+    
+    seriesRef.current?.setData(candleData);
+    mainChart.ma60Series.setData(ma60Data);
+    mainChart.ma20Series.setData(ma20Data);
+    mainChart.ma10Series.setData(ma10Data);
+    mainChart.boxHighSeries.setData(boxHighData);
+
+    const volumeData = uniqueData.map(d => ({
+      time: d.time as Time,
+      value: d.volume,
+      color: d.close >= d.open ? '#ef444488' : '#22c55e88',
+    }));
+    mainChart.volumeSeries.setData(volumeData);
+
+    macdChart.macdSeries.setData(macdData);
+    macdChart.signalSeries.setData(signalData);
+    macdChart.histogramSeries.setData(histogramData);
+
+    kdChart.kSeries.setData(kData);
+    kdChart.dSeries.setData(dData);
+
+    // Save state for crosshair lookup
+    mainChart._uniqueData = uniqueData;
+    mainChart._latestData = uniqueData[uniqueData.length - 1];
+    mainChart._lastMA60 = ma60Data[ma60Data.length - 1]?.value;
+    mainChart._lastMA20 = ma20Data[ma20Data.length - 1]?.value;
+
+    if (support && isInitializing) {
+      seriesRef.current?.createPriceLine({ price: support, color: '#3b82f6', lineWidth: 2, lineStyle: 2, axisLabelVisible: true });
+    }
+    if (resistance && isInitializing) {
+      seriesRef.current?.createPriceLine({ price: resistance, color: '#f59e0b', lineWidth: 2, lineStyle: 2, axisLabelVisible: true });
+    }
+
+    if (isInitializing) {
+      const dataLength = uniqueData.length;
+      if (dataLength > 0) {
+        const logicalRange = {
+          from: Math.max(0, dataLength - 100),
+          to: dataLength - 1,
+        };
+        mainChart.timeScale().setVisibleLogicalRange(logicalRange);
+        macdChart.timeScale().setVisibleLogicalRange(logicalRange);
+        kdChart.timeScale().setVisibleLogicalRange(logicalRange);
+      }
+      (mainChart as any)._hasSetData = true;
+    }
   }, [uniqueData, ma20Data, ma10Data, boxHighData, macdData, signalData, histogramData, kData, dData, support, resistance]);
 
+  // Real-time polling for latest quote
+  useEffect(() => {
+    if (!symbol || uniqueData.length === 0 || !mainChartRef.current) return;
 
+    let timerId: ReturnType<typeof setInterval>;
 
+    const fetchLatest = async () => {
+      try {
+        const querySymbol = /^[A-Za-z0-9]{4,6}$/.test(symbol) && !symbol.includes('.') ? `${symbol}.TW` : symbol;
+        const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${querySymbol}?interval=1d&range=1d`);
+        if (!res.ok) return;
+        const json = await res.json();
+        
+        const result = json.chart?.result?.[0];
+        if (!result) return;
+        
+        const timestamp = result.timestamp?.[result.timestamp.length - 1];
+        const quote = result.indicators?.quote?.[0];
+        
+        if (!timestamp || !quote) return;
+        
+        const open = quote.open[quote.open.length - 1];
+        const high = quote.high[quote.high.length - 1];
+        const low = quote.low[quote.low.length - 1];
+        const close = quote.close[quote.close.length - 1];
 
+        if (typeof close !== 'number' || typeof open !== 'number' || typeof high !== 'number' || typeof low !== 'number') return;
+        
+        const dateObj = new Date(timestamp * 1000);
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const newTS = `${year}-${month}-${day}` as Time;
 
+        const latestPoint = {
+          time: newTS,
+          open,
+          high,
+          low,
+          close
+        };
 
+        const lastTS = uniqueData[uniqueData.length - 1].time;
 
+        if (newTS === lastTS) {
+          seriesRef.current?.update(latestPoint);
+        } else if (newTS > lastTS) {
+          seriesRef.current?.update(latestPoint);
+        }
+      } catch (err) {
+        console.error('Failed to fetch real-time data:', err);
+      }
+    };
+
+    timerId = setInterval(fetchLatest, 60000);
+    return () => clearInterval(timerId);
+  }, [symbol, uniqueData]);
 
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
