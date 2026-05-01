@@ -193,7 +193,7 @@ function formatStockData(quotes: any[]) {
     high: formattedData.map(d => d.high),
     low: formattedData.map(d => d.low),
     close: closePrices,
-    period: 9,
+    period: 14,
     signalPeriod: 3
   });
 
@@ -527,7 +527,7 @@ async function startServer() {
         high: formattedData.map(d => d.high),
         low: formattedData.map(d => d.low),
         close: closePrices,
-        period: 9,
+        period: 14,
         signalPeriod: 3
       });
 
